@@ -7,8 +7,8 @@ app.use(express.json());
 
 // --- Miljövariabler ---
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const STAT_API_KEY = process.env.STAT_API_KEY;
-const ODDS_API_KEY = process.env.ODDS_API_KEY;
+const STAT_API_KEY = process.env.STAT_API_KEY; // API-Football nyckel
+const ODDS_API_KEY = process.env.ODDS_API_KEY; // Odds API nyckel
 
 // --- Testendpoints ---
 app.get("/", (req, res) => {
@@ -19,20 +19,25 @@ app.get("/stats", (req, res) => {
   res.json({ message: "Stats endpoint fungerar!" });
 });
 
-// --- Example API endpoint ---
+// --- Match analysis endpoint ---
 app.get("/get-match-analysis", async (req, res) => {
   const matchId = req.query.match_id;
   if (!matchId) return res.status(400).send("match_id saknas");
 
   try {
+    console.log("Hämtar statistik från API-Football...");
     const statsResponse = await axios.get(
-      "https://your-stats-api.com/matches/" + matchId,
-      { headers: { "X-API-Key": STAT_API_KEY } }
+      `https://v3.football.api-sports.io/fixtures?id=${matchId}`,
+      { headers: { 
+          "X-RapidAPI-Key": STAT_API_KEY,
+          "X-RapidAPI-Host": "v3.football.api-sports.io"
+        } 
+      }
     );
 
+    console.log("Hämtar odds (dummy-exempel)...");
     const oddsResponse = await axios.get(
-      "https://your-odds-api.com/matches/" + matchId,
-      { headers: { "X-API-Key": ODDS_API_KEY } }
+      `https://api.the-odds-api.com/v4/sports/soccer_epl/odds/?apiKey=${ODDS_API_KEY}`
     );
 
     const prompt = `
@@ -45,6 +50,7 @@ ${JSON.stringify(oddsResponse.data)}
 Analysera matchen och ge de mest spelvärda bettingalternativen samt en kort förklaring.
 `;
 
+    console.log("Skickar prompt till OpenAI...");
     const gptResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
@@ -52,7 +58,7 @@ Analysera matchen och ge de mest spelvärda bettingalternativen samt en kort fö
 
     res.json({ analysis: gptResponse.choices[0].message.content });
   } catch (err) {
-    console.error(err);
+    console.error("Fel i get-match-analysis:", err.response ? err.response.data : err);
     res.status(500).send("Något gick fel");
   }
 });
